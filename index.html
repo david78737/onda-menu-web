@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ONDA Menu — Browse</title>
+<meta name="description" content="Browse restaurant menus near you — search dishes, filter by what you eat, and see what's on the menu.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+  /* Same look as ONDA Nile: teal header, light-teal search bar, white cards,
+     an off-canvas tag drawer on the right. */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #F0F0F0; color: #333; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         font-size: 15px; line-height: 1.55; min-height: 100vh; }
+  a { color: #006F6F; }
+
+  header { background: #008787; padding: 14px 20px; }
+  .header-inner { max-width: 1000px; margin: 0 auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wordmark { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: .04em; }
+  .tagline { font-size: 13px; color: rgba(255,255,255,.8); }
+  .header-right { margin-left: auto; font-size: 12px; }
+  .header-right a { color: rgba(255,255,255,.85); }
+
+  .search-bar { background: #D4EBEB; border-bottom: 2px solid #008787; padding: 10px 20px;
+                box-shadow: 0 2px 6px rgba(0,150,136,.12); position: sticky; top: 0; z-index: 400; }
+  .search-inner { max-width: 1000px; margin: 0 auto; display: flex; align-items: center; gap: 8px; }
+  .search-inner input { flex: 1; min-width: 0; border: 1px solid #C0C0C0; background: #fff; color: #333; font-size: 15px;
+                        border-radius: 6px; padding: 8px 12px; outline: none; }
+  .search-inner input:focus { border-color: #008787; }
+  .toggle { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #C0C0C0; color: #333;
+            border-radius: 6px; padding: 8px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; font-family: inherit; }
+  .toggle:hover { background: #F0F0F0; }
+  .toggle.on { border-color: #008787; color: #008787; }
+  .toggle .count { font-size: 11px; background: #D4EBEB; color: #008787; border-radius: 10px; padding: 0 7px; }
+
+  .chips { max-width: 1000px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+  .chips:empty { display: none; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid #008787; color: #006F6F;
+          border-radius: 100px; padding: 2px 6px 2px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .chip .x { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; background: #E0F2F0;
+             align-items: center; justify-content: center; font-size: 11px; }
+  .chip:hover .x { background: #008787; color: #fff; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 14px 16px 48px; }
+  #status { font-size: 13px; color: #777; padding: 2px 0 10px; }
+  #map { height: 380px; border-radius: 8px; border: 1px solid #C8C8C8; margin-bottom: 12px; }
+  #map[hidden], .map-bar[hidden] { display: none; }
+  .map-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; color: #555; }
+  .btn { background: #008787; color: #fff; border: none; border-radius: 6px; padding: 8px 14px; font-size: 14px;
+         font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn.secondary { background: #fff; color: #006F6F; border: 1px solid #008787; }
+  select { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 6px; border: 1px solid #C0C0C0; background: #fff; }
+
+  .cards { display: flex; flex-direction: column; gap: 8px; }
+  .card { background: #fff; border: 1px solid #DCDCDC; border-radius: 8px; overflow: hidden; }
+  .card:hover, .card.open { border-color: #008787; }
+  .card-head { display: flex; gap: 10px; padding: 12px 14px; cursor: pointer; user-select: none; align-items: flex-start; }
+  .chev { flex-shrink: 0; margin-top: 5px; width: 12px; height: 12px; color: #AAA; transition: transform .18s; }
+  .card.open .chev { transform: rotate(90deg); }
+  .card-main { flex: 1; min-width: 0; }
+  .r-name { font-size: 16px; font-weight: 700; color: #222; }
+  .r-meta { font-size: 13px; color: #666; }
+  .r-side { text-align: right; font-size: 12px; color: #777; white-space: nowrap; }
+  .r-side b { display: block; font-size: 15px; color: #008787; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+           border: 1px solid #008787; color: #008787; border-radius: 4px; padding: 0 6px; margin-left: 6px; vertical-align: 2px; }
+  .card-body { display: none; border-top: 1px solid #EEE; padding: 6px 14px 14px; }
+  .card.open .card-body { display: block; }
+  .section { font-size: 13px; font-weight: 700; color: #008787; text-transform: uppercase; letter-spacing: .04em; margin: 12px 0 4px; }
+  .dish { padding: 7px 0; border-bottom: 1px solid #F2F2F2; }
+  .dish:last-child { border-bottom: none; }
+  .dish-top { display: flex; gap: 10px; }
+  .dish-name { flex: 1; font-weight: 600; }
+  .dish-price { white-space: nowrap; color: #333; }
+  .dish-desc { font-size: 13px; color: #555; }
+  .traits { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .trait { font-size: 11px; border-radius: 10px; padding: 0 8px; border: 1px solid; }
+  .trait.printed { color: #fff; }
+  .show-all { margin-top: 8px; font-size: 13px; background: none; border: none; color: #006F6F; text-decoration: underline; cursor: pointer; }
+  .r-links { margin-top: 8px; font-size: 13px; color: #666; }
+
+  .footer-note { margin-top: 24px; background: #fff; border: 1px dashed #008787; border-radius: 8px; padding: 14px 16px; font-size: 14px; }
+  .legal { margin-top: 14px; font-size: 11px; color: #999; }
+
+  /* Tag drawer */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 999; }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(280px, 88vw); background: #fff; border-left: 1px solid #D0D0D0;
+            z-index: 1000; transform: translateX(100%); transition: transform .25s; display: flex; flex-direction: column; }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 10px; border-bottom: 1px solid #E0E0E0; }
+  .drawer-head h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: #888; }
+  .drawer-close { background: none; border: none; color: #999; font-size: 22px; cursor: pointer; padding: 2px 8px; }
+  .drawer-search { padding: 10px 14px; border-bottom: 1px solid #EEE; }
+  .drawer-search input { width: 100%; border: 1px solid #C0C0C0; border-radius: 6px; padding: 7px 10px; font-size: 14px; outline: none; }
+  .drawer-search input:focus { border-color: #008787; }
+  .tag-list { padding: 10px 14px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .tag-group { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: .08em; margin: 8px 0 2px; }
+  .tag-btn { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #C8C8C8;
+             border-radius: 4px; padding: 5px 8px; font-size: 13px; cursor: pointer; color: #555; text-align: left; width: 100%; min-height: 30px; }
+  .tag-btn:hover { border-color: #008787; color: #008787; }
+  .tag-btn.active { background: #008787; border-color: #008787; color: #fff; font-weight: 600; }
+  .tag-btn.none { color: #BBB; border-color: #E6E6E6; }
+  .tag-main { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .star { color: #BBB; font-size: 15px; line-height: 1; }
+  .star.on { color: #e0b400; }
+  .tag-count { font-size: 11px; opacity: .65; margin-left: 6px; }
+
+  @media (max-width: 560px) {
+    .tagline { display: none; }
+    .toggle .label { display: none; }
+    #map { height: 300px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <span class="wordmark">ONDA Menu</span>
+    <span class="tagline">Your table's ready.</span>
+    <span class="header-right"><a href="https://www.onda.menu">onda.menu</a></span>
+  </div>
+</header>
+
+<div class="search-bar">
+  <div class="search-inner">
+    <input id="q" type="search" placeholder="Search dishes or restaurants…" autocomplete="off">
+    <button class="toggle" id="tagsBtn" type="button">🏷 <span class="label">Tags</span> <span class="count" id="tagCount" hidden></span></button>
+    <button class="toggle" id="mapBtn" type="button">🗺 <span class="label">Map</span></button>
+  </div>
+  <div class="chips" id="chips"></div>
+</div>
+
+<main>
+  <div class="map-bar" id="mapBar" hidden>
+    <span>Tap the map or drag the pin, then</span>
+    <button class="btn" id="searchHere" type="button">Search here</button>
+    <label>within
+      <select id="radius">
+        <option value="1609">1 mile</option>
+        <option value="4828" selected>3 miles</option>
+        <option value="8047">5 miles</option>
+        <option value="15000">9 miles</option>
+      </select>
+    </label>
+    <button class="btn secondary" id="myLocation" type="button">📍 Near me</button>
+  </div>
+  <div id="map" hidden></div>
+  <div id="status">Loading restaurants…</div>
+  <div class="cards" id="cards"></div>
+
+  <div class="footer-note">
+    <b>Don't see your favorite?</b> Add its menu with the ONDA Menu app — photograph it, or paste its web address.
+    Every menu you add helps the next person decide where to eat.
+  </div>
+  <div class="legal">
+    Menus are read automatically and may be out of date or contain mistakes. ✓ = printed on the menu; "likely" = a guess from the recipe.
+    For allergies, always ask the restaurant's staff. Restaurants never pay for placement.
+    Map © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.
+    <a href="https://www.onda.menu/privacy">Privacy</a> · <a href="https://www.onda.menu/terms">Terms</a>
+  </div>
+</main>
+
+<div class="backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" aria-label="Tags">
+  <div class="drawer-head"><h2>Tags</h2><button class="drawer-close" id="drawerClose" aria-label="Close">×</button></div>
+  <div class="drawer-search"><input id="tagQ" type="search" placeholder="Search tags… (e.g. veg, taco)"></div>
+  <div class="tag-list" id="tagList"></div>
+</aside>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+// ── Settings ──────────────────────────────────────────────────────────────
+const API = 'https://xrxm-29on-xlyt.n7e.xano.io/api:menu/browse';
+const START = { lat: 30.2347, lng: -97.8782, label: 'Oak Hill, Austin' };   // first view
+
+// ── State ─────────────────────────────────────────────────────────────────
+let restaurants = [];          // from the server, each with .dishes
+let center = { ...START };
+const selected = new Set();    // chosen tags
+const openCards = new Set();   // restaurant ids expanded
+const showAll = new Set();     // restaurant ids showing all dishes despite filters
+let favorites = new Set();
+try { favorites = new Set(JSON.parse(localStorage.getItem('ondamenu_fav_tags') || '[]')); } catch (_) {}
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ── Tags: built from each dish's labels, course, cuisine and ingredients ──
+const PROTEIN_WORDS = {
+  chicken: ['chicken', 'pollo', 'murgh'], beef: ['beef', 'steak', 'brisket', 'barbacoa', 'carne asada'],
+  pork: ['pork', 'carnitas', 'al pastor', 'chorizo', 'bacon', 'ham'], lamb: ['lamb', 'mutton', 'goat'],
+  fish: ['fish', 'salmon', 'tuna', 'tilapia', 'catfish', 'cod'], shellfish: ['shrimp', 'prawn', 'crab', 'lobster', 'squid', 'calamari', 'oyster', 'scallop'],
+  tofu: ['tofu'], egg: ['egg'],
+};
+const COURSE = { appetizer: 'appetizers', soup: 'soups', salad: 'salads', main: 'mains', side: 'sides', dessert: 'desserts', drink: 'drinks' };
+const has = (d, trait, statuses) => (d.traits || []).some((t) => t.trait === trait && statuses.includes(t.status));
+const wordIn = (text, w) => new RegExp(`\\b${w}(s|es)?\\b`, 'i').test(text);
+
+function tagsOf(d, r) {
+  const tags = [];
+  if (has(d, 'vegan', ['is'])) tags.push('vegan');
+  if (has(d, 'vegan', ['is']) || has(d, 'vegetarian', ['is'])) tags.push('vegetarian');
+  if (has(d, 'gluten', ['free_of'])) tags.push('gluten-free');
+  if (has(d, 'spicy', ['contains'])) tags.push('spicy');
+  const text = `${d.name_original} ${d.description_original || ''}`;
+  for (const [p, words] of Object.entries(PROTEIN_WORDS)) {
+    if (has(d, p, ['contains']) || (p === 'lamb' && has(d, 'goat', ['contains'])) || words.some((w) => wordIn(text, w))) tags.push(p);
+  }
+  if (COURSE[d.course]) tags.push(COURSE[d.course]);
+  const cuisine = d.cuisine || (r.cuisines || [])[0];
+  if (cuisine && cuisine !== 'Other') tags.push(cuisine.toLowerCase());
+  return [...new Set(tags)];
+}
+const GROUP_OF = (t) => ['vegetarian', 'vegan', 'gluten-free', 'spicy'].includes(t) ? 'Diet'
+  : PROTEIN_WORDS[t] ? 'Protein' : Object.values(COURSE).includes(t) ? 'Course' : 'Cuisine';
+
+// ── Matching ──────────────────────────────────────────────────────────────
+function dishMatches(d, r, q) {
+  if (q && !`${d.name_original} ${d.description_original || ''} ${d.section_original || ''}`.toLowerCase().includes(q)) return false;
+  for (const t of selected) if (!d._tags.includes(t)) return false;
+  return true;
+}
+function filtered() {
+  const q = $('q').value.trim().toLowerCase();
+  const out = [];
+  for (const r of restaurants) {
+    const nameHit = q && r.name.toLowerCase().includes(q);
+    const dishes = r.dishes.filter((d) => dishMatches(d, r, nameHit ? '' : q));
+    if (dishes.length || (nameHit && selected.size === 0) || (!q && !selected.size)) out.push({ r, dishes });
+  }
+  return out;
+}
+
+// ── Formatting ────────────────────────────────────────────────────────────
+function price(d) {
+  if (d.price == null) return '';
+  const p = Number(d.price);
+  const s = Number.isInteger(p) ? p.toLocaleString() : p.toFixed(2);
+  return !d.currency_code || d.currency_code === 'USD' ? `$${s}` : `${s} ${d.currency_code}`;
+}
+function miles(m) { const mi = m / 1609.34; return mi < 0.1 ? 'here' : `${mi < 10 ? mi.toFixed(1) : Math.round(mi)} mi`; }
+function readOn(ts) { if (!ts) return ''; const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
+function traitChip(t) {
+  const name = t.trait.replace('_', ' ');
+  const label = t.status === 'is' ? name[0].toUpperCase() + name.slice(1)
+    : t.trait === 'spicy' ? (t.status === 'contains' ? 'Spicy' : 'May be spicy')
+    : t.status === 'contains' ? `Contains ${name}` : t.status === 'free_of' ? `No ${name}` : `May contain ${name}`;
+  const color = t.status === 'contains' ? '#C25E00' : t.status === 'may_contain' ? '#607D8B' : '#2E7D32';
+  const printed = t.basis === 'printed';
+  return `<span class="trait${printed ? ' printed' : ''}" style="border-color:${color};${printed ? `background:${color}` : `color:${color}`}">${printed ? '✓ ' : ''}${esc(label)}${printed ? '' : ' (likely)'}</span>`;
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────
+function render() {
+  const rows = filtered();
+  const filtering = $('q').value.trim() || selected.size;
+  const dishTotal = rows.reduce((n, x) => n + (filtering ? x.dishes.length : x.r.dish_count), 0);
+  $('status').textContent = restaurants.length
+    ? `Near ${center.label} · ${rows.length} place${rows.length === 1 ? '' : 's'} · ${dishTotal} ${filtering ? 'matching ' : ''}dish${dishTotal === 1 ? '' : 'es'}`
+    : `No menus yet near ${center.label}. Be the first — add one with the app.`;
+
+  $('cards').innerHTML = rows.map(({ r, dishes }) => {
+    const open = openCards.has(r.id) || (filtering && rows.length <= 3);
+    const list = filtering && !showAll.has(r.id) ? dishes : r.dishes;
+    let lastSection = null;
+    const body = list.map((d) => {
+      const sec = d.section_original && d.section_original !== lastSection ? `<div class="section">${esc(d.section_original)}</div>` : '';
+      lastSection = d.section_original || lastSection;
+      return `${sec}<div class="dish"><div class="dish-top"><span class="dish-name">${esc(d.name_original)}</span><span class="dish-price">${price(d)}</span></div>`
+        + (d.description_original ? `<div class="dish-desc">${esc(d.description_original)}</div>` : '')
+        + (d.traits && d.traits.length ? `<div class="traits">${d.traits.map(traitChip).join('')}</div>` : '') + '</div>';
+    }).join('');
+    const more = filtering && dishes.length < r.dishes.length
+      ? `<button class="show-all" data-all="${r.id}">${showAll.has(r.id) ? 'Show only matching dishes' : `Show all ${r.dishes.length} dishes`}</button>` : '';
+    const links = [r.address_text, r.phone, r.website_url ? `<a href="${esc(r.website_url)}" target="_blank" rel="noopener">Website</a>` : '']
+      .filter(Boolean).map((x, i) => i === 2 ? x : esc(x)).join(' · ');
+    return `<div class="card${open ? ' open' : ''}" data-id="${r.id}">
+      <div class="card-head">
+        <svg class="chev" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        <div class="card-main">
+          <div class="r-name">${esc(r.name)}${r.verification === 'restaurant_verified' ? '<span class="badge">Verified</span>' : ''}</div>
+          <div class="r-meta">${esc((r.cuisines || []).join(' · '))}${r.last_seen ? ` · menu read ${readOn(r.last_seen)}` : ''}</div>
+        </div>
+        <div class="r-side"><b>${filtering ? dishes.length : r.dish_count}</b>${filtering ? 'matching' : 'dishes'}<br>${miles(r.distance_m)}</div>
+      </div>
+      <div class="card-body">${links ? `<div class="r-links">${links}</div>` : ''}${body || '<div class="dish-desc">No dishes yet.</div>'}${more}</div>
+    </div>`;
+  }).join('');
+
+  // Active-filter chips
+  $('chips').innerHTML = [...selected].map((t) => `<span class="chip" data-chip="${esc(t)}">${esc(t)} <span class="x">×</span></span>`).join('');
+  $('tagCount').hidden = !selected.size;
+  $('tagCount').textContent = selected.size;
+  $('tagsBtn').classList.toggle('on', selected.size > 0);
+  renderTags();
+  renderMarkers(rows);
+}
+
+function renderTags() {
+  // Counts reflect what's left after the current filters, so a few picks narrow fast.
+  const q = $('q').value.trim().toLowerCase();
+  const counts = new Map(), all = new Map();
+  for (const r of restaurants) for (const d of r.dishes) {
+    for (const t of d._tags) all.set(t, (all.get(t) || 0) + 1);
+    if (dishMatches(d, r, q && !r.name.toLowerCase().includes(q) ? q : '')) for (const t of d._tags) counts.set(t, (counts.get(t) || 0) + 1);
+  }
+  const tq = $('tagQ').value.trim().toLowerCase();
+  const tags = [...all.keys()].filter((t) => !tq || t.includes(tq));
+  const order = ['Diet', 'Protein', 'Course', 'Cuisine'];
+  const sortKey = (t) => [selected.has(t) ? 0 : 1, favorites.has(t) ? 0 : 1, -(counts.get(t) || 0), t];
+  tags.sort((a, b) => { const ka = sortKey(a), kb = sortKey(b); for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1; return 0; });
+  let html = '';
+  for (const g of order) {
+    const inGroup = tags.filter((t) => GROUP_OF(t) === g);
+    if (!inGroup.length) continue;
+    html += `<div class="tag-group">${g}</div>` + inGroup.map((t) => {
+      const n = counts.get(t) || 0;
+      const cls = selected.has(t) ? 'active' : n ? '' : 'none';
+      return `<button class="tag-btn ${cls}" data-tag="${esc(t)}"><span class="tag-main"><span class="star${favorites.has(t) ? ' on' : ''}" data-star="${esc(t)}">${favorites.has(t) ? '★' : '☆'}</span>${esc(t)}</span><span class="tag-count">${n}</span></button>`;
+    }).join('');
+  }
+  $('tagList').innerHTML = html || '<div class="dish-desc">No tags match.</div>';
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────
+let map = null, pin = null, markerLayer = null;
+function ensureMap() {
+  if (map) return;
+  map = L.map('map').setView([center.lat, center.lng], 13);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+  pin = L.marker([center.lat, center.lng], { draggable: true, title: 'Search here' }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+  map.on('click', (e) => pin.setLatLng(e.latlng));
+}
+function renderMarkers(rows) {
+  if (!map) return;
+  markerLayer.clearLayers();
+  for (const { r, dishes } of rows) {
+    L.circleMarker([r.lat, r.lng], { radius: 8, color: '#006F6F', fillColor: '#008787', fillOpacity: .85, weight: 2 })
+      .bindPopup(`<b>${esc(r.name)}</b><br>${esc((r.cuisines || []).join(' · '))}<br>${dishes.length || r.dish_count} dishes`)
+      .on('click', () => { openCards.add(r.id); render(); document.querySelector(`.card[data-id="${r.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); })
+      .addTo(markerLayer);
+  }
+}
+
+// ── Loading ───────────────────────────────────────────────────────────────
+async function load() {
+  $('status').textContent = `Loading restaurants near ${center.label}…`;
+  try {
+    const url = `${API}?lat=${center.lat}&lng=${center.lng}&radius_m=${$('radius').value}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    // The server sends restaurants and one flat list of dishes; group them here.
+    const byRestaurant = new Map();
+    for (const d of data.dishes || []) {
+      if (!byRestaurant.has(d.restaurant_id)) byRestaurant.set(d.restaurant_id, []);
+      byRestaurant.get(d.restaurant_id).push(d);
+    }
+    restaurants = (data.restaurants || [])
+      .filter((r) => r && r.id != null)
+      .map((r) => {
+        const dishes = (byRestaurant.get(r.id) || r.dishes || []).sort((a, b) => a.id - b.id);   // menu order
+        const lastSeen = dishes.reduce((m, d) => Math.max(m, d.last_seen_at || 0), 0);
+        return { ...r, dish_count: dishes.length, last_seen: lastSeen || null, dishes: dishes.map((d) => ({ ...d, _tags: tagsOf(d, r) })) };
+      })
+      .sort((a, b) => (a.distance_m ?? 1e9) - (b.distance_m ?? 1e9));   // nearest first
+  } catch (e) {
+    restaurants = [];
+    $('status').textContent = 'Couldn\'t load restaurants right now. Please try again in a moment.';
+    $('cards').innerHTML = '';
+    return;
+  }
+  render();
+}
+
+// ── Events ────────────────────────────────────────────────────────────────
+$('q').addEventListener('input', render);
+$('tagQ').addEventListener('input', renderTags);
+const openDrawer = (on) => { $('drawer').classList.toggle('open', on); $('backdrop').classList.toggle('open', on); if (on) setTimeout(() => $('tagQ').focus(), 250); };
+$('tagsBtn').addEventListener('click', () => openDrawer(true));
+$('drawerClose').addEventListener('click', () => openDrawer(false));
+$('backdrop').addEventListener('click', () => openDrawer(false));
+$('tagList').addEventListener('click', (e) => {
+  const star = e.target.closest('[data-star]');
+  if (star) {
+    const t = star.dataset.star;
+    favorites.has(t) ? favorites.delete(t) : favorites.add(t);
+    try { localStorage.setItem('ondamenu_fav_tags', JSON.stringify([...favorites])); } catch (_) {}
+    renderTags();
+    return;
+  }
+  const btn = e.target.closest('[data-tag]');
+  if (!btn) return;
+  const t = btn.dataset.tag;
+  selected.has(t) ? selected.delete(t) : selected.add(t);
+  render();
+});
+$('chips').addEventListener('click', (e) => { const c = e.target.closest('[data-chip]'); if (c) { selected.delete(c.dataset.chip); render(); } });
+$('cards').addEventListener('click', (e) => {
+  const all = e.target.closest('[data-all]');
+  if (all) { const id = Number(all.dataset.all); showAll.has(id) ? showAll.delete(id) : showAll.add(id); render(); return; }
+  const head = e.target.closest('.card-head');
+  if (!head) return;
+  const id = Number(head.parentElement.dataset.id);
+  openCards.has(id) ? openCards.delete(id) : openCards.add(id);
+  head.parentElement.classList.toggle('open');
+});
+$('mapBtn').addEventListener('click', () => {
+  const show = $('map').hidden;
+  $('map').hidden = !show; $('mapBar').hidden = !show; $('mapBtn').classList.toggle('on', show);
+  if (show) { ensureMap(); setTimeout(() => map.invalidateSize(), 50); render(); }
+});
+$('searchHere').addEventListener('click', () => {
+  const p = pin.getLatLng();
+  center = { lat: +p.lat.toFixed(5), lng: +p.lng.toFixed(5), label: 'the pin' };
+  map.setView(p);
+  load();
+});
+$('radius').addEventListener('change', () => load());
+$('myLocation').addEventListener('click', () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition((pos) => {
+    center = { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5), label: 'you' };
+    if (map) { pin.setLatLng([center.lat, center.lng]); map.setView([center.lat, center.lng], 14); }
+    load();
+  });
+});
+
+load();
+</script>
+</body>
+</html>
