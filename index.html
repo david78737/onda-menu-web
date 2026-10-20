@@ -106,6 +106,20 @@
   .star.on { color: #e0b400; }
   .tag-count { font-size: 11px; opacity: .65; margin-left: 6px; }
 
+  /* Numbered places: the same number on the map dot and its card */
+  .num { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; border-radius: 11px;
+         background: #008787; color: #fff; font-size: 12px; font-weight: 700; margin-right: 8px; padding: 0 5px; vertical-align: 1px; }
+  .card.picked { border-color: #008787; box-shadow: 0 0 0 2px #008787; }
+  .card.picked .num, .dot.picked { background: #003F3F; }
+  .dot { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 12px;
+         background: #008787; color: #fff; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+         font: 700 12px/1 system-ui, sans-serif; box-sizing: border-box; }
+  .dot.picked { width: 32px; height: 32px; border-radius: 16px; font-size: 14px; margin: -4px 0 0 -4px; }
+  .stack-list button { display: block; width: 100%; text-align: left; background: none; border: none; padding: 5px 2px;
+                       font: inherit; font-size: 13px; cursor: pointer; color: #222; }
+  .stack-list button:hover { color: #008787; }
+  .pin-icon { width: 12px; height: 18px; vertical-align: -3px; margin-right: 4px; }
+
   @media (max-width: 560px) {
     .tagline { display: none; }
     .toggle .label { display: none; }
@@ -133,17 +147,8 @@
 
 <main>
   <div class="map-bar" id="mapBar" hidden>
-    <span>Tap the map or drag the pin, then</span>
-    <button class="btn" id="searchHere" type="button">Search here</button>
-    <label>within
-      <select id="radius">
-        <option value="1609">1 mile</option>
-        <option value="4828" selected>3 miles</option>
-        <option value="8047">5 miles</option>
-        <option value="15000">9 miles</option>
-      </select>
-    </label>
-    <button class="btn secondary" id="myLocation" type="button">📍 Near me</button>
+    <span>Drag the blue pin or tap the map to search there, or</span>
+    <button class="btn secondary" id="myLocation" type="button"><svg class="pin-icon" viewBox="0 0 12 18"><path d="M6 0C2.7 0 0 2.6 0 5.9 0 10.3 6 18 6 18s6-7.7 6-12.1C12 2.6 9.3 0 6 0z" fill="#2A81CB"/><circle cx="6" cy="6" r="2.3" fill="#fff"/></svg>Near me</button>
   </div>
   <div id="map" hidden></div>
   <div id="status">Loading restaurants…</div>
@@ -173,6 +178,8 @@
 // ── Settings ──────────────────────────────────────────────────────────────
 const API = 'https://xrxm-29on-xlyt.n7e.xano.io/api:menu/browse';
 const START = { lat: 30.2347, lng: -97.8782, label: 'Oak Hill, Austin' };   // first view
+const RADIUS_M = 15000;   // the most the server searches (≈9 miles)
+const CLOSEST = 20;       // show this many places — near downtown that's a short walk, in the suburbs a short drive
 
 // ── State ─────────────────────────────────────────────────────────────────
 let restaurants = [];          // from the server, each with .dishes
@@ -180,6 +187,7 @@ let center = { ...START };
 const selected = new Set();    // chosen tags
 const openCards = new Set();   // restaurant ids expanded
 const showAll = new Set();     // restaurant ids showing all dishes despite filters
+let pickedId = null;           // restaurant highlighted on both the map and the list
 let favorites = new Set();
 try { favorites = new Set(JSON.parse(localStorage.getItem('ondamenu_fav_tags') || '[]')); } catch (_) {}
 
@@ -229,7 +237,8 @@ function filtered() {
     const dishes = r.dishes.filter((d) => dishMatches(d, r, nameHit ? '' : q));
     if (dishes.length || (nameHit && selected.size === 0) || (!q && !selected.size)) out.push({ r, dishes });
   }
-  return out;
+  // Restaurants arrive nearest first, so these are the closest places that match; number them 1, 2, 3…
+  return out.slice(0, CLOSEST).map((x, i) => ({ ...x, n: i + 1 }));
 }
 
 // ── Formatting ────────────────────────────────────────────────────────────
@@ -256,11 +265,15 @@ function render() {
   const rows = filtered();
   const filtering = $('q').value.trim() || selected.size;
   const dishTotal = rows.reduce((n, x) => n + (filtering ? x.dishes.length : x.r.dish_count), 0);
-  $('status').textContent = restaurants.length
-    ? `Near ${center.label} · ${rows.length} place${rows.length === 1 ? '' : 's'} · ${dishTotal} ${filtering ? 'matching ' : ''}dish${dishTotal === 1 ? '' : 'es'}`
-    : `No menus yet near ${center.label}. Be the first — add one with the app.`;
+  const farthest = rows.length ? miles(rows[rows.length - 1].r.distance_m) : '';
+  const places = rows.length === CLOSEST ? `${CLOSEST} closest places, all within ${farthest}`
+    : `${rows.length} place${rows.length === 1 ? '' : 's'}`;
+  $('status').textContent = !restaurants.length
+    ? `No menus yet near ${center.label}. Be the first — add one with the app.`
+    : !rows.length ? `Nothing matches near ${center.label}.`
+    : `Near ${center.label} · ${places} · ${dishTotal} ${filtering ? 'matching ' : ''}dish${dishTotal === 1 ? '' : 'es'}`;
 
-  $('cards').innerHTML = rows.map(({ r, dishes }) => {
+  $('cards').innerHTML = rows.map(({ r, dishes, n }) => {
     const open = openCards.has(r.id) || (filtering && rows.length <= 3);
     const list = filtering && !showAll.has(r.id) ? dishes : r.dishes;
     let lastSection = null;
@@ -275,14 +288,14 @@ function render() {
       ? `<button class="show-all" data-all="${r.id}">${showAll.has(r.id) ? 'Show only matching dishes' : `Show all ${r.dishes.length} dishes`}</button>` : '';
     const links = [r.address_text, r.phone, r.website_url ? `<a href="${esc(r.website_url)}" target="_blank" rel="noopener">Website</a>` : '']
       .filter(Boolean).map((x, i) => i === 2 ? x : esc(x)).join(' · ');
-    return `<div class="card${open ? ' open' : ''}" data-id="${r.id}">
+    return `<div class="card${open ? ' open' : ''}${r.id === pickedId ? ' picked' : ''}" data-id="${r.id}">
       <div class="card-head">
         <svg class="chev" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
         <div class="card-main">
-          <div class="r-name">${esc(r.name)}${r.verification === 'restaurant_verified' ? '<span class="badge">Verified</span>' : ''}</div>
+          <div class="r-name"><span class="num">${n}</span>${esc(r.name)}${r.verification === 'restaurant_verified' ? '<span class="badge">Verified</span>' : ''}</div>
           <div class="r-meta">${esc((r.cuisines || []).join(' · '))}${r.last_seen ? ` · menu read ${readOn(r.last_seen)}` : ''}</div>
         </div>
-        <div class="r-side"><b>${filtering ? dishes.length : r.dish_count}</b>${filtering ? 'matching' : 'dishes'}<br>${miles(r.distance_m)}</div>
+        <div class="r-side"><b>${filtering ? dishes.length : r.dish_count}</b>${filtering ? 'matching' : 'dishes'}</div>
       </div>
       <div class="card-body">${links ? `<div class="r-links">${links}</div>` : ''}${body || '<div class="dish-desc">No dishes yet.</div>'}${more}</div>
     </div>`;
@@ -331,26 +344,65 @@ function ensureMap() {
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
-  pin = L.marker([center.lat, center.lng], { draggable: true, title: 'Search here' }).addTo(map);
+  pin = L.marker([center.lat, center.lng], { draggable: true, title: 'Searching here — drag me', zIndexOffset: 1000 }).addTo(map);
   markerLayer = L.layerGroup().addTo(map);
-  map.on('click', (e) => pin.setLatLng(e.latlng));
+  // Moving the pin searches right away — no extra button.
+  pin.on('dragend', () => searchAt(pin.getLatLng()));
+  map.on('click', (e) => { pin.setLatLng(e.latlng); searchAt(e.latlng); });
 }
+function searchAt(p) {
+  center = { lat: +p.lat.toFixed(5), lng: +p.lng.toFixed(5), label: 'the pin' };
+  pickedId = null;
+  load({ fit: true });
+}
+let shownRows = [];
 function renderMarkers(rows) {
+  shownRows = rows;
   if (!map) return;
   markerLayer.clearLayers();
-  for (const { r, dishes } of rows) {
-    L.circleMarker([r.lat, r.lng], { radius: 8, color: '#006F6F', fillColor: '#008787', fillOpacity: .85, weight: 2 })
-      .bindPopup(`<b>${esc(r.name)}</b><br>${esc((r.cuisines || []).join(' · '))}<br>${dishes.length || r.dish_count} dishes`)
-      .on('click', () => { openCards.add(r.id); render(); document.querySelector(`.card[data-id="${r.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); })
-      .addTo(markerLayer);
+  // Draw from farthest to nearest so lower numbers sit on top.
+  for (const { r, n } of [...rows].reverse()) {
+    const picked = r.id === pickedId;
+    L.marker([r.lat, r.lng], {
+      icon: L.divIcon({ className: '', html: `<div class="dot${picked ? ' picked' : ''}">${n}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }),
+      title: r.name, zIndexOffset: picked ? 900 : -n,
+    }).on('click', (e) => tapDot(r, e.target.getLatLng())).addTo(markerLayer);
   }
+}
+// A tap on a dot: if other dots sit on top of it, list them all; otherwise go straight to its card.
+function tapDot(r, latlng) {
+  const here = map.latLngToContainerPoint(latlng);
+  const stack = shownRows.filter((x) => map.latLngToContainerPoint([x.r.lat, x.r.lng]).distanceTo(here) < 20);
+  if (stack.length < 2) { pick(r.id, { scroll: true }); return; }
+  const list = stack.map((x) => `<button data-pick="${x.r.id}"><span class="num">${x.n}</span>${esc(x.r.name)}</button>`).join('');
+  const popup = L.popup({ closeButton: false }).setLatLng(latlng).setContent(`<div class="stack-list">${list}</div>`).openOn(map);
+  popup.getElement().addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pick]');
+    if (b) { map.closePopup(); pick(Number(b.dataset.pick), { scroll: true }); }
+  });
+}
+// Highlight one place on the map and in the list.
+function pick(id, { scroll = false, pan = false } = {}) {
+  pickedId = id;
+  if (scroll) openCards.add(id);
+  render();
+  const row = shownRows.find((x) => x.r.id === id);
+  if (pan && map && row && !map.getBounds().contains([row.r.lat, row.r.lng])) map.panTo([row.r.lat, row.r.lng]);
+  if (scroll) document.querySelector(`.card[data-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+// Zoom so the pin and every numbered place fit on screen.
+function fitResults() {
+  if (!map) return;
+  const pts = [[center.lat, center.lng], ...shownRows.map((x) => [x.r.lat, x.r.lng])];
+  if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 16 });
+  else map.setView(pts[0], 14);
 }
 
 // ── Loading ───────────────────────────────────────────────────────────────
-async function load() {
+async function load({ fit = false } = {}) {
   $('status').textContent = `Loading restaurants near ${center.label}…`;
   try {
-    const url = `${API}?lat=${center.lat}&lng=${center.lng}&radius_m=${$('radius').value}`;
+    const url = `${API}?lat=${center.lat}&lng=${center.lng}&radius_m=${RADIUS_M}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
@@ -375,6 +427,7 @@ async function load() {
     return;
   }
   render();
+  if (fit) fitResults();
 }
 
 // ── Events ────────────────────────────────────────────────────────────────
@@ -406,27 +459,24 @@ $('cards').addEventListener('click', (e) => {
   const head = e.target.closest('.card-head');
   if (!head) return;
   const id = Number(head.parentElement.dataset.id);
-  openCards.has(id) ? openCards.delete(id) : openCards.add(id);
-  head.parentElement.classList.toggle('open');
+  const opening = !openCards.has(id);
+  opening ? openCards.add(id) : openCards.delete(id);
+  // Opening a card lights up its dot on the map.
+  if (opening) pick(id, { pan: true });
+  else head.parentElement.classList.toggle('open');
 });
 $('mapBtn').addEventListener('click', () => {
   const show = $('map').hidden;
   $('map').hidden = !show; $('mapBar').hidden = !show; $('mapBtn').classList.toggle('on', show);
-  if (show) { ensureMap(); setTimeout(() => map.invalidateSize(), 50); render(); }
+  if (show) { ensureMap(); setTimeout(() => { map.invalidateSize(); render(); fitResults(); }, 50); }
 });
-$('searchHere').addEventListener('click', () => {
-  const p = pin.getLatLng();
-  center = { lat: +p.lat.toFixed(5), lng: +p.lng.toFixed(5), label: 'the pin' };
-  map.setView(p);
-  load();
-});
-$('radius').addEventListener('change', () => load());
 $('myLocation').addEventListener('click', () => {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition((pos) => {
     center = { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5), label: 'you' };
-    if (map) { pin.setLatLng([center.lat, center.lng]); map.setView([center.lat, center.lng], 14); }
-    load();
+    if (map) pin.setLatLng([center.lat, center.lng]);
+    pickedId = null;
+    load({ fit: true });
   });
 });
 
