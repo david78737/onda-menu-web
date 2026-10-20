@@ -119,6 +119,15 @@
                        font: inherit; font-size: 13px; cursor: pointer; color: #222; }
   .stack-list button:hover { color: #008787; }
   .pin-icon { width: 12px; height: 18px; vertical-align: -3px; margin-right: 4px; }
+  /* Places we know about but have no menu for yet */
+  .dot.empty { width: 14px; height: 14px; border-radius: 7px; background: #fff; border: 2px solid #8A8A8A; box-shadow: none; }
+  .nomenu { margin-top: 18px; background: #fff; border: 1px solid #DCDCDC; border-radius: 8px; }
+  .nomenu summary { padding: 12px 16px; cursor: pointer; font-weight: 600; font-size: 15px; }
+  .nomenu .hint { padding: 0 16px 8px; font-size: 13px; color: #666; }
+  .nomenu ul { list-style: none; margin: 0; padding: 0 16px 12px; }
+  .nomenu li { padding: 7px 0; border-top: 1px solid #F0F0F0; font-size: 14px; cursor: pointer; }
+  .nomenu li span { color: #888; font-size: 12px; margin-left: 6px; }
+  .nomenu li.picked { color: #008787; font-weight: 600; }
 
   @media (max-width: 560px) {
     .tagline { display: none; }
@@ -153,6 +162,11 @@
   <div id="map" hidden></div>
   <div id="status">Loading restaurants…</div>
   <div class="cards" id="cards"></div>
+  <details class="nomenu" id="nomenu" hidden>
+    <summary id="nomenuTitle"></summary>
+    <div class="hint">We know these places but nobody has added their menu yet. Eating at one? Add it with the ONDA Menu app.</div>
+    <ul id="nomenuList"></ul>
+  </details>
 
   <div class="footer-note">
     <b>Don't see your favorite?</b> Add its menu with the ONDA Menu app — photograph it, or paste its web address.
@@ -182,7 +196,8 @@ const RADIUS_M = 15000;   // the most the server searches (≈9 miles)
 const CLOSEST = 20;       // show this many places — near downtown that's a short walk, in the suburbs a short drive
 
 // ── State ─────────────────────────────────────────────────────────────────
-let restaurants = [];          // from the server, each with .dishes
+let restaurants = [];          // from the server, each with .dishes (only places with a menu)
+let noMenu = [];               // places we know about with no menu yet, nearest first
 let center = { ...START };
 const selected = new Set();    // chosen tags
 const openCards = new Set();   // restaurant ids expanded
@@ -307,7 +322,17 @@ function render() {
   $('tagCount').textContent = selected.size;
   $('tagsBtn').classList.toggle('on', selected.size > 0);
   renderTags();
-  renderMarkers(rows);
+  const empty = emptyShown();
+  $('nomenu').hidden = !empty.length;
+  $('nomenuTitle').textContent = `Nearby, no menu yet (${empty.length})`;
+  $('nomenuList').innerHTML = empty.map((r) => `<li data-empty="${r.id}"${r.id === pickedId ? ' class="picked"' : ''}>${esc(r.name)}<span>${esc(r.address_text || '')}</span></li>`).join('');
+  renderMarkers(rows, empty);
+}
+// Menu-less places: hidden while picking tags (they have no dishes); a search matches their names.
+function emptyShown() {
+  if (selected.size) return [];
+  const q = $('q').value.trim().toLowerCase();
+  return noMenu.filter((r) => !q || r.name.toLowerCase().includes(q));
 }
 
 function renderTags() {
@@ -356,10 +381,16 @@ function searchAt(p) {
   load({ fit: true });
 }
 let shownRows = [];
-function renderMarkers(rows) {
+function renderMarkers(rows, empty = []) {
   shownRows = rows;
   if (!map) return;
   markerLayer.clearLayers();
+  for (const r of empty) {
+    L.marker([r.lat, r.lng], {
+      icon: L.divIcon({ className: '', html: '<div class="dot empty"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }),
+      title: r.name, zIndexOffset: -1000,
+    }).bindPopup(`<b>${esc(r.name)}</b><br>No menu yet.<br>Eating here? Add it with the ONDA Menu app.`).addTo(markerLayer);
+  }
   // Draw from farthest to nearest so lower numbers sit on top.
   for (const { r, n } of [...rows].reverse()) {
     const picked = r.id === pickedId;
@@ -412,7 +443,7 @@ async function load({ fit = false } = {}) {
       if (!byRestaurant.has(d.restaurant_id)) byRestaurant.set(d.restaurant_id, []);
       byRestaurant.get(d.restaurant_id).push(d);
     }
-    restaurants = (data.restaurants || [])
+    const all = (data.restaurants || [])
       .filter((r) => r && r.id != null)
       .map((r) => {
         const dishes = (byRestaurant.get(r.id) || r.dishes || []).sort((a, b) => a.id - b.id);   // menu order
@@ -420,6 +451,8 @@ async function load({ fit = false } = {}) {
         return { ...r, dish_count: dishes.length, last_seen: lastSeen || null, dishes: dishes.map((d) => ({ ...d, _tags: tagsOf(d, r) })) };
       })
       .sort((a, b) => (a.distance_m ?? 1e9) - (b.distance_m ?? 1e9));   // nearest first
+    restaurants = all.filter((r) => r.dish_count > 0);
+    noMenu = all.filter((r) => r.dish_count === 0).slice(0, 40);
   } catch (e) {
     restaurants = [];
     $('status').textContent = 'Couldn\'t load restaurants right now. Please try again in a moment.';
@@ -464,6 +497,18 @@ $('cards').addEventListener('click', (e) => {
   // Opening a card lights up its dot on the map.
   if (opening) pick(id, { pan: true });
   else head.parentElement.classList.toggle('open');
+});
+// Tapping a menu-less place in the list shows it on the map.
+$('nomenuList').addEventListener('click', (e) => {
+  const li = e.target.closest('[data-empty]');
+  if (!li) return;
+  const r = noMenu.find((x) => x.id === Number(li.dataset.empty));
+  pickedId = r.id;
+  if ($('map').hidden) $('mapBtn').click();
+  render();
+  map.setView([r.lat, r.lng], 17);
+  markerLayer.eachLayer((m) => { if (m.options.title === r.name && m.getLatLng().equals([r.lat, r.lng])) m.openPopup(); });
+  $('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 $('mapBtn').addEventListener('click', () => {
   const show = $('map').hidden;
