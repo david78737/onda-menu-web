@@ -90,6 +90,16 @@ table.chart { border-collapse: separate; border-spacing: 0; width: 100%; min-wid
 .m.l { color: var(--plan); background: var(--plan-bg); }
 .cell-note { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 3px; line-height: 1.35; }
 
+/* Accordion chart sections */
+details.acc { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+details.acc > summary { list-style: none; cursor: pointer; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+details.acc > summary::-webkit-details-marker { display: none; }
+details.acc > summary h2 { font-size: clamp(1.2rem, 2.6vw, 1.6rem); }
+details.acc > summary::after { content: "+"; font-family: var(--display); font-size: 1.4rem; font-weight: 600; color: var(--teal); flex: none; transition: transform 0.2s ease; }
+details.acc[open] > summary::after { transform: rotate(45deg); }
+details.acc > summary:hover h2 { color: var(--teal); }
+details.acc .acc-body { display: grid; gap: 16px; padding: 0 18px 20px; }
+
 /* Profiles */
 .profiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
 .prof { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
@@ -186,51 +196,59 @@ ul.clean { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 </section>
 
 <section aria-labelledby="stages">
-  <h2 id="stages">Who helps at each step of the day</h2>
-  <p class="prose">Each competitor covers one or two steps well. ONDA Menu's opportunity is connecting all six, and handing directions to Google Maps instead of competing with it.</p>
-  <div class="legend" aria-label="Legend"><span class="m y">Yes</span><span class="m p">Partly</span><span class="m n">No</span><span>Shaded row = ONDA Menu</span></div>
-  <div class="chart-box">
-  <table class="chart stages">
-    <thead>
-      <tr><th scope="col">Who helps</th><th scope="col">Plan the day</th><th scope="col">Build your own map</th><th scope="col">Carry it with you</th><th scope="col">Understand and order</th><th scope="col">Get there and back</th><th scope="col">Remember</th></tr>
-    </thead>
-    <tbody>
-      <tr><th scope="row" class="us">ONDA Menu</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Map of menus and places, on a big screen</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Restaurants, pins, homebase in layers</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Places file; no account</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Translated, filtered, shown to the cook</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Homebase + Directions via Google Maps</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">I had this, stars, notes, on your phone</span></td></tr>
-      <tr><th scope="row">Google Maps</th><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Saved lists in your Google account</span></td><td><span class="m y">Yes</span><span class="cell-note">Account sync</span></td><td><span class="m p">Partly</span><span class="cell-note">Menu photos, popular dishes</span></td><td><span class="m y">Yes</span><span class="cell-note">Turn-by-turn</span></td><td><span class="m p">Partly</span><span class="cell-note">Timeline of places, not dishes</span></td></tr>
-      <tr><th scope="row">Google Lens / Translate</th><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span><span class="cell-note">Translates the page</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td></tr>
-      <tr><th scope="row">Yelp</th><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Collections</span></td><td><span class="m y">Yes</span><span class="cell-note">Account sync</span></td><td><span class="m p">Partly</span><span class="cell-note">English menus, dish photos</span></td><td><span class="m p">Partly</span><span class="cell-note">Opens a maps app</span></td><td><span class="m p">Partly</span><span class="cell-note">Reviews you write</span></td></tr>
-      <tr><th scope="row">Menu translator apps</th><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td></tr>
-      <tr><th scope="row">Dish diaries</th><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Your own places</span></td><td><span class="m p">Partly</span></td><td><span class="m n">No</span><span class="cell-note">You type dishes in</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td></tr>
-      <tr><th scope="row">Beli</th><td><span class="m y">Yes</span><span class="cell-note">Ranked lists</span></td><td><span class="m p">Partly</span><span class="cell-note">Want-to-try list</span></td><td><span class="m y">Yes</span><span class="cell-note">Account sync</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Opens a maps app</span></td><td><span class="m p">Partly</span><span class="cell-note">Rankings of places</span></td></tr>
-      <tr><th scope="row">ChatGPT / Gemini</th><td><span class="m y">Yes</span><span class="cell-note">Itineraries in chat</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Chat history</span></td><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Describes a route</span></td><td><span class="m n">No</span></td></tr>
-    </tbody>
-  </table>
-  </div>
+  <details class="acc">
+    <summary><h2 id="stages">Who helps at each step of the day</h2></summary>
+    <div class="acc-body">
+      <p class="prose">Each competitor covers one or two steps well. ONDA Menu's opportunity is connecting all six, and handing directions to Google Maps instead of competing with it.</p>
+      <div class="legend" aria-label="Legend"><span class="m y">Yes</span><span class="m p">Partly</span><span class="m n">No</span><span>Shaded row = ONDA Menu</span></div>
+      <div class="chart-box">
+      <table class="chart stages">
+        <thead>
+          <tr><th scope="col">Who helps</th><th scope="col">Plan the day</th><th scope="col">Build your own map</th><th scope="col">Carry it with you</th><th scope="col">Understand and order</th><th scope="col">Get there and back</th><th scope="col">Remember</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row" class="us">ONDA Menu</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Map of menus and places, on a big screen</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Restaurants, pins, homebase in layers</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Places file; no account</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Translated, filtered, shown to the cook</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">Homebase + Directions via Google Maps</span></td><td class="us"><span class="m y">Yes</span><span class="cell-note">I had this, stars, notes, on your phone</span></td></tr>
+          <tr><th scope="row">Google Maps</th><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Saved lists in your Google account</span></td><td><span class="m y">Yes</span><span class="cell-note">Account sync</span></td><td><span class="m p">Partly</span><span class="cell-note">Menu photos, popular dishes</span></td><td><span class="m y">Yes</span><span class="cell-note">Turn-by-turn</span></td><td><span class="m p">Partly</span><span class="cell-note">Timeline of places, not dishes</span></td></tr>
+          <tr><th scope="row">Google Lens / Translate</th><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span><span class="cell-note">Translates the page</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td></tr>
+          <tr><th scope="row">Yelp</th><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Collections</span></td><td><span class="m y">Yes</span><span class="cell-note">Account sync</span></td><td><span class="m p">Partly</span><span class="cell-note">English menus, dish photos</span></td><td><span class="m p">Partly</span><span class="cell-note">Opens a maps app</span></td><td><span class="m p">Partly</span><span class="cell-note">Reviews you write</span></td></tr>
+          <tr><th scope="row">Menu translator apps</th><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td></tr>
+          <tr><th scope="row">Dish diaries</th><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Your own places</span></td><td><span class="m p">Partly</span></td><td><span class="m n">No</span><span class="cell-note">You type dishes in</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td></tr>
+          <tr><th scope="row">Beli</th><td><span class="m y">Yes</span><span class="cell-note">Ranked lists</span></td><td><span class="m p">Partly</span><span class="cell-note">Want-to-try list</span></td><td><span class="m y">Yes</span><span class="cell-note">Account sync</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Opens a maps app</span></td><td><span class="m p">Partly</span><span class="cell-note">Rankings of places</span></td></tr>
+          <tr><th scope="row">ChatGPT / Gemini</th><td><span class="m y">Yes</span><span class="cell-note">Itineraries in chat</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Chat history</span></td><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Describes a route</span></td><td><span class="m n">No</span></td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
 </section>
 
 <section aria-labelledby="mapping">
-  <h2 id="mapping">Personal mapping and travel tools</h2>
-  <p class="prose">These apps are closer to the traveler lifestyle than menu translators are. None of them reads a menu, rates a dish or keeps your map off a server by default; most are better at sharing today.</p>
-  <div class="legend" aria-label="Legend"><span class="m y">Yes</span><span class="m p">Partly</span><span class="m n">No</span><span class="m l">Planned</span><span>Shaded column = ONDA Menu</span></div>
-  <div class="chart-box">
-  <table class="chart stages">
-    <thead>
-      <tr><th scope="col">Feature</th><th scope="col" class="us">ONDA Menu</th><th scope="col">Google My Maps</th><th scope="col">Wanderlog</th><th scope="col">Mapstr</th><th scope="col">Organic Maps</th><th scope="col">Google Maps saved lists</th></tr>
-    </thead>
-    <tbody>
-      <tr><th scope="row">Your own places on a map, in layers you switch</th><td class="us"><span class="m y">Yes</span><span class="cell-note">My Places · My Restaurants · ONDA Guide</span></td><td><span class="m y">Yes</span><span class="cell-note">Layers on custom maps</span></td><td><span class="m p">Partly</span><span class="cell-note">Places per trip, by day</span></td><td><span class="m p">Partly</span><span class="cell-note">Tags and lists</span></td><td><span class="m p">Partly</span><span class="cell-note">Bookmark lists</span></td><td><span class="m p">Partly</span><span class="cell-note">Saved lists</span></td></tr>
-      <tr><th scope="row">Homebases kept over the years</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Dated; the trip sits around them</span></td><td><span class="m p">Partly</span><span class="cell-note">Any pin you add</span></td><td><span class="m p">Partly</span><span class="cell-note">Lodging per trip</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Home and Work</span></td></tr>
-      <tr><th scope="row">Restaurant menus read and translated</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Menu photos, popular dishes</span></td></tr>
-      <tr><th scope="row">Dishes you had, rated</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td></tr>
-      <tr><th scope="row">Directions</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Through Google Maps</span></td><td><span class="m p">Partly</span><span class="cell-note">Through Google Maps</span></td><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Opens a maps app</span></td><td><span class="m y">Yes</span><span class="cell-note">Offline, turn-by-turn</span></td><td><span class="m y">Yes</span></td></tr>
-      <tr><th scope="row">Plan on a computer, use on the phone</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Places file; no account</span></td><td><span class="m y">Yes</span><span class="cell-note">Google account</span></td><td><span class="m y">Yes</span><span class="cell-note">Account</span></td><td><span class="m y">Yes</span><span class="cell-note">Account</span></td><td><span class="m p">Partly</span><span class="cell-note">Bookmark files (KML)</span></td><td><span class="m y">Yes</span><span class="cell-note">Google account</span></td></tr>
-      <tr><th scope="row">Works with no account</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span></td></tr>
-      <tr><th scope="row">Your places stay on your phone</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td><td><span class="m n">No</span></td></tr>
-      <tr><th scope="row">Share a trip's map</th><td class="us"><span class="m l">Planned</span><span class="cell-note">Places file out, from the phone</span></td><td><span class="m y">Yes</span><span class="cell-note">Share link</span></td><td><span class="m y">Yes</span><span class="cell-note">Share link, collaborate</span></td><td><span class="m y">Yes</span><span class="cell-note">Share with friends</span></td><td><span class="m y">Yes</span><span class="cell-note">Export bookmarks</span></td><td><span class="m y">Yes</span><span class="cell-note">Share lists</span></td></tr>
-    </tbody>
-  </table>
-  </div>
-  <p class="note">Ratings for these tools come from general knowledge of their published features, not new research or hands-on tests. Check each one before using it in marketing.</p>
+  <details class="acc">
+    <summary><h2 id="mapping">Personal mapping and travel tools</h2></summary>
+    <div class="acc-body">
+      <p class="prose">These apps are closer to the traveler lifestyle than menu translators are. None of them reads a menu, rates a dish or keeps your map off a server by default; most are better at sharing today.</p>
+      <div class="legend" aria-label="Legend"><span class="m y">Yes</span><span class="m p">Partly</span><span class="m n">No</span><span class="m l">Planned</span><span>Shaded column = ONDA Menu</span></div>
+      <div class="chart-box">
+      <table class="chart stages">
+        <thead>
+          <tr><th scope="col">Feature</th><th scope="col" class="us">ONDA Menu</th><th scope="col">Google My Maps</th><th scope="col">Wanderlog</th><th scope="col">Mapstr</th><th scope="col">Organic Maps</th><th scope="col">Google Maps saved lists</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Your own places on a map, in layers you switch</th><td class="us"><span class="m y">Yes</span><span class="cell-note">My Places · My Restaurants · ONDA Guide</span></td><td><span class="m y">Yes</span><span class="cell-note">Layers on custom maps</span></td><td><span class="m p">Partly</span><span class="cell-note">Places per trip, by day</span></td><td><span class="m p">Partly</span><span class="cell-note">Tags and lists</span></td><td><span class="m p">Partly</span><span class="cell-note">Bookmark lists</span></td><td><span class="m p">Partly</span><span class="cell-note">Saved lists</span></td></tr>
+          <tr><th scope="row">Homebases kept over the years</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Dated; the trip sits around them</span></td><td><span class="m p">Partly</span><span class="cell-note">Any pin you add</span></td><td><span class="m p">Partly</span><span class="cell-note">Lodging per trip</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Home and Work</span></td></tr>
+          <tr><th scope="row">Restaurant menus read and translated</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span><span class="cell-note">Menu photos, popular dishes</span></td></tr>
+          <tr><th scope="row">Dishes you had, rated</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td></tr>
+          <tr><th scope="row">Directions</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Through Google Maps</span></td><td><span class="m p">Partly</span><span class="cell-note">Through Google Maps</span></td><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span><span class="cell-note">Opens a maps app</span></td><td><span class="m y">Yes</span><span class="cell-note">Offline, turn-by-turn</span></td><td><span class="m y">Yes</span></td></tr>
+          <tr><th scope="row">Plan on a computer, use on the phone</th><td class="us"><span class="m y">Yes</span><span class="cell-note">Places file; no account</span></td><td><span class="m y">Yes</span><span class="cell-note">Google account</span></td><td><span class="m y">Yes</span><span class="cell-note">Account</span></td><td><span class="m y">Yes</span><span class="cell-note">Account</span></td><td><span class="m p">Partly</span><span class="cell-note">Bookmark files (KML)</span></td><td><span class="m y">Yes</span><span class="cell-note">Google account</span></td></tr>
+          <tr><th scope="row">Works with no account</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m p">Partly</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td><td><span class="m p">Partly</span></td></tr>
+          <tr><th scope="row">Your places stay on your phone</th><td class="us"><span class="m y">Yes</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m n">No</span></td><td><span class="m y">Yes</span></td><td><span class="m n">No</span></td></tr>
+          <tr><th scope="row">Share a trip's map</th><td class="us"><span class="m l">Planned</span><span class="cell-note">Places file out, from the phone</span></td><td><span class="m y">Yes</span><span class="cell-note">Share link</span></td><td><span class="m y">Yes</span><span class="cell-note">Share link, collaborate</span></td><td><span class="m y">Yes</span><span class="cell-note">Share with friends</span></td><td><span class="m y">Yes</span><span class="cell-note">Export bookmarks</span></td><td><span class="m y">Yes</span><span class="cell-note">Share lists</span></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="note">Ratings for these tools come from general knowledge of their published features, not new research or hands-on tests. Check each one before using it in marketing.</p>
+    </div>
+  </details>
 </section>
 
 <section aria-labelledby="bottom">
@@ -248,14 +266,16 @@ ul.clean { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 </section>
 
 <section aria-labelledby="chart">
-  <h2 id="chart">Feature chart</h2>
-  <p class="prose">Columns group similar apps; notes name the app when only some in a group do something. Scroll sideways on a phone — the feature names stay in place.</p>
-  <div class="legend" aria-label="Legend">
-    <span class="m y">Yes</span><span class="m p">Partly</span><span class="m n">No</span><span class="m l">Planned</span>
-    <span>Shaded column = ONDA Menu</span>
-  </div>
-  <div class="chart-box">
-  <table class="chart">
+  <details class="acc">
+    <summary><h2 id="chart">Feature chart</h2></summary>
+    <div class="acc-body">
+      <p class="prose">Columns group similar apps; notes name the app when only some in a group do something. Scroll sideways on a phone — the feature names stay in place.</p>
+      <div class="legend" aria-label="Legend">
+        <span class="m y">Yes</span><span class="m p">Partly</span><span class="m n">No</span><span class="m l">Planned</span>
+        <span>Shaded column = ONDA Menu</span>
+      </div>
+      <div class="chart-box">
+      <table class="chart">
     <thead>
       <tr>
         <th scope="col">Feature</th>
@@ -347,8 +367,10 @@ ul.clean { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
         <td class="us"><span class="m y">Free</span></td><td><span class="m y">Free</span></td><td><span class="m y">Free</span></td><td><span class="m y">Free</span></td><td><span class="m p">Subscription</span><span class="cell-note">MenuGuide listed at $4.99/week or $9.99/month</span></td><td><span class="m p">Mostly free</span><span class="cell-note">Some Pro tiers, e.g. $2.99/month</span></td><td><span class="m y">Free</span></td><td><span class="m p">Varies</span></td><td><span class="m p">Free / $20 a month</span></td></tr>
     </tbody>
   </table>
-  </div>
-  <p class="note">Marks for competitors come from their store listings, websites and press coverage, not hands-on tests. Treat "Partly" as "check before claiming it in marketing". "Not checked" means the listings didn't say.</p>
+      </div>
+      <p class="note">Marks for competitors come from their store listings, websites and press coverage, not hands-on tests. Treat "Partly" as "check before claiming it in marketing". "Not checked" means the listings didn't say.</p>
+    </div>
+  </details>
 </section>
 
 <section aria-labelledby="photos">
