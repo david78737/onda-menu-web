@@ -397,6 +397,7 @@ async function searchAt(p) {
   const lat = +p.lat.toFixed(5), lng = +p.lng.toFixed(5);
   center = { lat, lng, label: 'the pin' };
   pickedId = null;
+  syncSendLabel();
   load({ fit: true });
   // Best-effort: swap in a real place name once reverse geocoding resolves.
   try {
@@ -406,6 +407,7 @@ async function searchAt(p) {
     // Only apply if the pin hasn't moved again while this was in flight.
     if (data && data.display_name && center.lat === lat && center.lng === lng) {
       center.label = shortLabel(data.display_name);
+      syncSendLabel();
       render();
     }
   } catch (_) {}
@@ -448,6 +450,7 @@ async function goToPlace(raw) {
     pickedId = null;
     $('placeQ').value = '';
     addPlaceHistory(label, lat, lng);
+    syncSendLabel();
     const showingMap = !$('map').hidden;
     if (!showingMap) $('mapBtn').click();
     if (map) pin.setLatLng([center.lat, center.lng]);
@@ -483,14 +486,26 @@ function setCode(c) {
     else { localStorage.removeItem(CODE_KEY); localStorage.removeItem(CODE_SAVED_AT_KEY); }
   } catch (_) {}
 }
+// The label box shows a guessed name (search result, or reverse-geocoded address) but is always
+// editable; syncSendLabel refreshes the guess only while the user hasn't typed their own, so an
+// in-progress edit is never clobbered by a slow reverse-geocode landing after the fact.
+let lastAutoLabel = '';
+function syncSendLabel() {
+  const input = document.getElementById('sendLabel');
+  if (!input) { lastAutoLabel = center.label; return; }
+  if (input.value === lastAutoLabel) input.value = center.label;
+  lastAutoLabel = center.label;
+}
 function renderSendBar() {
   const code = getCode();
   $('sendBar').innerHTML = code
-    ? `<button class="btn" id="sendBtn" type="button">📍 Send this spot to my phone</button>
+    ? `<input id="sendLabel" type="text" value="${esc(center.label)}" placeholder="Name this spot">
+       <button class="btn" id="sendBtn" type="button">📍 Send to my phone</button>
        <button class="toggle" id="changeCode" type="button">change code</button>
        <span id="sendMsg"></span>`
     : `<input id="codeInput" type="text" placeholder="Paste the private code from the ONDA Menu app">
        <button class="btn secondary" id="codeSave" type="button">Save code</button>`;
+  lastAutoLabel = center.label;
 }
 $('sendBar').addEventListener('click', async (e) => {
   if (e.target.id === 'codeSave') {
@@ -502,16 +517,17 @@ $('sendBar').addEventListener('click', async (e) => {
     setCode('');
     renderSendBar();
   } else if (e.target.id === 'sendBtn') {
+    const label = ($('sendLabel').value || '').trim() || center.label;
     const msg = $('sendMsg');
     msg.textContent = 'Sending…';
     try {
       const res = await fetch(SAVE_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ private_code: getCode(), label: center.label, lat: center.lat, lng: center.lng }),
+        body: JSON.stringify({ private_code: getCode(), label, lat: center.lat, lng: center.lng }),
       });
       if (!res.ok) throw new Error(res.status);
-      msg.textContent = `Sent "${center.label}" — open ONDA Menu on your phone to see it.`;
+      msg.textContent = `Sent "${label}" — open ONDA Menu on your phone to see it.`;
     } catch (err) {
       msg.textContent = `Couldn't send it. Try again in a moment.`;
     }
@@ -660,6 +676,7 @@ $('myLocation').addEventListener('click', () => {
     center = { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5), label: 'you' };
     if (map) pin.setLatLng([center.lat, center.lng]);
     pickedId = null;
+    syncSendLabel();
     load({ fit: true });
   });
 });
