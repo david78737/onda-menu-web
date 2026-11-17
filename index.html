@@ -393,10 +393,22 @@ function ensureMap() {
   pin.on('dragend', () => searchAt(pin.getLatLng()));
   map.on('click', (e) => { pin.setLatLng(e.latlng); searchAt(e.latlng); });
 }
-function searchAt(p) {
-  center = { lat: +p.lat.toFixed(5), lng: +p.lng.toFixed(5), label: 'the pin' };
+async function searchAt(p) {
+  const lat = +p.lat.toFixed(5), lng = +p.lng.toFixed(5);
+  center = { lat, lng, label: 'the pin' };
   pickedId = null;
   load({ fit: true });
+  // Best-effort: swap in a real place name once reverse geocoding resolves.
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    // Only apply if the pin hasn't moved again while this was in flight.
+    if (data && data.display_name && center.lat === lat && center.lng === lng) {
+      center.label = shortLabel(data.display_name);
+      render();
+    }
+  } catch (_) {}
 }
 // Typed place search (city, address, country…) via OpenStreetMap's free Nominatim geocoder.
 function shortLabel(displayName) { return displayName.split(',').slice(0, 2).map((s) => s.trim()).join(', '); }
