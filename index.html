@@ -449,10 +449,28 @@ async function goToPlace(raw) {
 
 // Send the current spot to the ONDA Menu app via Xano, tagged with a private code the app shows you.
 // Nothing here is visible to anyone else — the code is how your own saved spots stay separate from everyone else's.
+// TEMPORARY DESIGN (2026-11-17): a self-expiring pasted code, not a real pairing mechanism.
+// Good enough for a personal phone/laptop; a shared/public computer's copy dies on its own within
+// a day rather than lingering. Revisit if a sturdier browser↔app connection is ever needed.
 const CODE_KEY = 'ondamenu_private_code';
+const CODE_SAVED_AT_KEY = 'ondamenu_private_code_saved_at';
+const CODE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h
 const SAVE_API = 'https://xrxm-29on-xlyt.n7e.xano.io/api:menu/saved-location';
-function getCode() { try { return localStorage.getItem(CODE_KEY) || ''; } catch (_) { return ''; } }
-function setCode(c) { try { localStorage.setItem(CODE_KEY, c); } catch (_) {} }
+function getCode() {
+  try {
+    const code = localStorage.getItem(CODE_KEY);
+    const savedAt = Number(localStorage.getItem(CODE_SAVED_AT_KEY) || 0);
+    if (!code) return '';
+    if (Date.now() - savedAt > CODE_MAX_AGE_MS) { setCode(''); return ''; }
+    return code;
+  } catch (_) { return ''; }
+}
+function setCode(c) {
+  try {
+    if (c) { localStorage.setItem(CODE_KEY, c); localStorage.setItem(CODE_SAVED_AT_KEY, String(Date.now())); }
+    else { localStorage.removeItem(CODE_KEY); localStorage.removeItem(CODE_SAVED_AT_KEY); }
+  } catch (_) {}
+}
 function renderSendBar() {
   const code = getCode();
   $('sendBar').innerHTML = code
