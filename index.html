@@ -33,6 +33,11 @@
   .toggle.on { border-color: #008787; color: #008787; }
   .toggle .count { font-size: 11px; background: #D4EBEB; color: #008787; border-radius: 10px; padding: 0 7px; }
 
+  .place-row { max-width: 1000px; margin: 6px auto 0; display: flex; gap: 8px; }
+  .place-row input { flex: 1; min-width: 0; border: 1px solid #C0C0C0; background: #fff; color: #333; font-size: 13px;
+                      border-radius: 6px; padding: 6px 10px; outline: none; }
+  .place-row input:focus { border-color: #008787; }
+
   .chips { max-width: 1000px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
   .chips:empty { display: none; }
   .chip { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid #008787; color: #006F6F;
@@ -151,6 +156,10 @@
     <button class="toggle" id="tagsBtn" type="button">🏷 <span class="label">Tags</span> <span class="count" id="tagCount" hidden></span></button>
     <button class="toggle" id="mapBtn" type="button">🗺 <span class="label">Map</span></button>
   </div>
+  <div class="place-row" id="placeRow">
+    <input id="placeQ" type="text" placeholder="Go to a city, address, or country…" autocomplete="off">
+    <button class="btn secondary" id="placeGo" type="button">Go</button>
+  </div>
   <div class="chips" id="chips"></div>
 </div>
 
@@ -203,6 +212,7 @@ const selected = new Set();    // chosen tags
 const openCards = new Set();   // restaurant ids expanded
 const showAll = new Set();     // restaurant ids showing all dishes despite filters
 let pickedId = null;           // restaurant highlighted on both the map and the list
+let geocoding = false;          // a place search is in flight
 let favorites = new Set();
 try { favorites = new Set(JSON.parse(localStorage.getItem('ondamenu_fav_tags') || '[]')); } catch (_) {}
 
@@ -380,6 +390,33 @@ function searchAt(p) {
   pickedId = null;
   load({ fit: true });
 }
+// Typed place search (city, address, country…) via OpenStreetMap's free Nominatim geocoder.
+function shortLabel(displayName) { return displayName.split(',').slice(0, 2).map((s) => s.trim()).join(', '); }
+async function goToPlace(raw) {
+  const query = raw.trim();
+  if (!query || geocoding) return;
+  geocoding = true;
+  $('status').textContent = `Searching for "${query}"…`;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    if (!data.length) { $('status').textContent = `Couldn't find "${query}". Try a different spelling or add a country.`; return; }
+    const { lat, lon, display_name } = data[0];
+    center = { lat: +(+lat).toFixed(5), lng: +(+lon).toFixed(5), label: shortLabel(display_name) };
+    pickedId = null;
+    $('placeQ').value = '';
+    const showingMap = !$('map').hidden;
+    if (!showingMap) $('mapBtn').click();
+    if (map) pin.setLatLng([center.lat, center.lng]);
+    await load({ fit: true });
+  } catch (e) {
+    $('status').textContent = `Couldn't search right now. Please try again in a moment.`;
+  } finally {
+    geocoding = false;
+  }
+}
 let shownRows = [];
 function renderMarkers(rows, empty = []) {
   shownRows = rows;
@@ -464,6 +501,8 @@ async function load({ fit = false } = {}) {
 }
 
 // ── Events ────────────────────────────────────────────────────────────────
+$('placeGo').addEventListener('click', () => goToPlace($('placeQ').value));
+$('placeQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); goToPlace($('placeQ').value); } });
 $('q').addEventListener('input', render);
 $('tagQ').addEventListener('input', renderTags);
 const openDrawer = (on) => { $('drawer').classList.toggle('open', on); $('backdrop').classList.toggle('open', on); if (on) setTimeout(() => $('tagQ').focus(), 250); };
