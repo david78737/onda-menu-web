@@ -38,6 +38,12 @@
                       border-radius: 6px; padding: 6px 10px; outline: none; }
   .place-row input:focus { border-color: #008787; }
 
+  .send-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; color: #555; }
+  .send-bar input { flex: 1; min-width: 160px; border: 1px solid #C0C0C0; background: #fff; color: #333; font-size: 13px;
+                     border-radius: 6px; padding: 6px 10px; outline: none; }
+  .send-bar input:focus { border-color: #008787; }
+  .send-bar[hidden] { display: none; }
+
   .chips { max-width: 1000px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
   .chips:empty { display: none; }
   .chip { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid #008787; color: #006F6F;
@@ -157,7 +163,8 @@
     <button class="toggle" id="mapBtn" type="button">🗺 <span class="label">Map</span></button>
   </div>
   <div class="place-row" id="placeRow">
-    <input id="placeQ" type="text" placeholder="Go to a city, address, or country…" autocomplete="off">
+    <input id="placeQ" type="text" placeholder="Go to a city, address, or country…" autocomplete="off" list="placeHistory">
+    <datalist id="placeHistory"></datalist>
     <button class="btn secondary" id="placeGo" type="button">Go</button>
   </div>
   <div class="chips" id="chips"></div>
@@ -168,6 +175,7 @@
     <span>Drag the blue pin or tap the map to search there, or</span>
     <button class="btn secondary" id="myLocation" type="button"><svg class="pin-icon" viewBox="0 0 12 18"><path d="M6 0C2.7 0 0 2.6 0 5.9 0 10.3 6 18 6 18s6-7.7 6-12.1C12 2.6 9.3 0 6 0z" fill="#2A81CB"/><circle cx="6" cy="6" r="2.3" fill="#fff"/></svg>Near me</button>
   </div>
+  <div class="send-bar" id="sendBar" hidden></div>
   <div id="map" hidden></div>
   <div id="status">Loading restaurants…</div>
   <div class="cards" id="cards"></div>
@@ -392,21 +400,42 @@ function searchAt(p) {
 }
 // Typed place search (city, address, country…) via OpenStreetMap's free Nominatim geocoder.
 function shortLabel(displayName) { return displayName.split(',').slice(0, 2).map((s) => s.trim()).join(', '); }
+
+// Remembers places you've gone to before, so the box can offer them again instead of re-searching.
+const PLACE_HISTORY_KEY = 'ondamenu_place_history';
+function getPlaceHistory() { try { return JSON.parse(localStorage.getItem(PLACE_HISTORY_KEY) || '[]'); } catch (_) { return []; } }
+function addPlaceHistory(label, lat, lng) {
+  const hist = getPlaceHistory().filter((p) => p.label !== label);
+  hist.unshift({ label, lat, lng });
+  try { localStorage.setItem(PLACE_HISTORY_KEY, JSON.stringify(hist.slice(0, 15))); } catch (_) {}
+  renderPlaceHistory();
+}
+function renderPlaceHistory() {
+  $('placeHistory').innerHTML = getPlaceHistory().map((p) => `<option value="${esc(p.label)}">`).join('');
+}
+
 async function goToPlace(raw) {
   const query = raw.trim();
   if (!query || geocoding) return;
   geocoding = true;
   $('status').textContent = `Searching for "${query}"…`;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
-    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
-    if (!data.length) { $('status').textContent = `Couldn't find "${query}". Try a different spelling or add a country.`; return; }
-    const { lat, lon, display_name } = data[0];
-    center = { lat: +(+lat).toFixed(5), lng: +(+lon).toFixed(5), label: shortLabel(display_name) };
+    const known = getPlaceHistory().find((p) => p.label === query);
+    let lat, lng, label;
+    if (known) {
+      ({ lat, lng, label } = known);
+    } else {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      if (!data.length) { $('status').textContent = `Couldn't find "${query}". Try a different spelling or add a country.`; return; }
+      lat = +(+data[0].lat).toFixed(5); lng = +(+data[0].lon).toFixed(5); label = shortLabel(data[0].display_name);
+    }
+    center = { lat, lng, label };
     pickedId = null;
     $('placeQ').value = '';
+    addPlaceHistory(label, lat, lng);
     const showingMap = !$('map').hidden;
     if (!showingMap) $('mapBtn').click();
     if (map) pin.setLatLng([center.lat, center.lng]);
@@ -417,6 +446,47 @@ async function goToPlace(raw) {
     geocoding = false;
   }
 }
+
+// Send the current spot to the ONDA Menu app via Xano, tagged with a private code the app shows you.
+// Nothing here is visible to anyone else — the code is how your own saved spots stay separate from everyone else's.
+const CODE_KEY = 'ondamenu_private_code';
+const SAVE_API = 'https://xrxm-29on-xlyt.n7e.xano.io/api:menu/saved-location';
+function getCode() { try { return localStorage.getItem(CODE_KEY) || ''; } catch (_) { return ''; } }
+function setCode(c) { try { localStorage.setItem(CODE_KEY, c); } catch (_) {} }
+function renderSendBar() {
+  const code = getCode();
+  $('sendBar').innerHTML = code
+    ? `<button class="btn" id="sendBtn" type="button">📍 Send this spot to my phone</button>
+       <button class="toggle" id="changeCode" type="button">change code</button>
+       <span id="sendMsg"></span>`
+    : `<input id="codeInput" type="text" placeholder="Paste the private code from the ONDA Menu app">
+       <button class="btn secondary" id="codeSave" type="button">Save code</button>`;
+}
+$('sendBar').addEventListener('click', async (e) => {
+  if (e.target.id === 'codeSave') {
+    const v = $('codeInput').value.trim();
+    if (!v) return;
+    setCode(v);
+    renderSendBar();
+  } else if (e.target.id === 'changeCode') {
+    setCode('');
+    renderSendBar();
+  } else if (e.target.id === 'sendBtn') {
+    const msg = $('sendMsg');
+    msg.textContent = 'Sending…';
+    try {
+      const res = await fetch(SAVE_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ private_code: getCode(), label: center.label, lat: center.lat, lng: center.lng }),
+      });
+      if (!res.ok) throw new Error(res.status);
+      msg.textContent = `Sent "${center.label}" — open ONDA Menu on your phone to see it.`;
+    } catch (err) {
+      msg.textContent = `Couldn't send it. Try again in a moment.`;
+    }
+  }
+});
 let shownRows = [];
 function renderMarkers(rows, empty = []) {
   shownRows = rows;
@@ -551,8 +621,8 @@ $('nomenuList').addEventListener('click', (e) => {
 });
 $('mapBtn').addEventListener('click', () => {
   const show = $('map').hidden;
-  $('map').hidden = !show; $('mapBar').hidden = !show; $('mapBtn').classList.toggle('on', show);
-  if (show) { ensureMap(); setTimeout(() => { map.invalidateSize(); render(); fitResults(); }, 50); }
+  $('map').hidden = !show; $('mapBar').hidden = !show; $('sendBar').hidden = !show; $('mapBtn').classList.toggle('on', show);
+  if (show) { ensureMap(); renderSendBar(); setTimeout(() => { map.invalidateSize(); render(); fitResults(); }, 50); }
 });
 $('myLocation').addEventListener('click', () => {
   if (!navigator.geolocation) return;
@@ -564,6 +634,7 @@ $('myLocation').addEventListener('click', () => {
   });
 });
 
+renderPlaceHistory();
 load();
 </script>
 </body>
