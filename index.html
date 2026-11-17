@@ -403,7 +403,9 @@ async function searchAt(p) {
   renderSendBar();
   load({ fit: true });
   try {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`;
+    // Street-level (zoom=18), not district-level — several drops in the same neighborhood
+    // otherwise all resolve to the same generic name and become impossible to tell apart.
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`;
     const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
     const data = await res.json();
     // Only apply if the pin hasn't moved again while this was in flight.
