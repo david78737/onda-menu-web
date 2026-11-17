@@ -395,11 +395,13 @@ function ensureMap() {
 }
 async function searchAt(p) {
   const lat = +p.lat.toFixed(5), lng = +p.lng.toFixed(5);
-  center = { lat, lng, label: 'the pin' };
+  center = { lat, lng, label: 'Dropped pin' };
   pickedId = null;
-  syncSendLabel();
+  // Sending is blocked until the real name resolves, so a quick click can never
+  // go out carrying this placeholder instead of an actual place name.
+  labelResolving = true;
+  renderSendBar();
   load({ fit: true });
-  // Best-effort: swap in a real place name once reverse geocoding resolves.
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`;
     const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
@@ -407,10 +409,15 @@ async function searchAt(p) {
     // Only apply if the pin hasn't moved again while this was in flight.
     if (data && data.display_name && center.lat === lat && center.lng === lng) {
       center.label = shortLabel(data.display_name);
-      syncSendLabel();
       render();
     }
-  } catch (_) {}
+  } catch (_) {
+  } finally {
+    if (center.lat === lat && center.lng === lng) {
+      labelResolving = false;
+      renderSendBar();
+    }
+  }
 }
 // Typed place search (city, address, country…) via OpenStreetMap's free Nominatim geocoder.
 function shortLabel(displayName) { return displayName.split(',').slice(0, 2).map((s) => s.trim()).join(', '); }
@@ -490,6 +497,7 @@ function setCode(c) {
 // editable; syncSendLabel refreshes the guess only while the user hasn't typed their own, so an
 // in-progress edit is never clobbered by a slow reverse-geocode landing after the fact.
 let lastAutoLabel = '';
+let labelResolving = false; // true while searchAt's reverse-geocode is in flight — sending is blocked meanwhile.
 function syncSendLabel() {
   const input = document.getElementById('sendLabel');
   if (!input) { lastAutoLabel = center.label; return; }
@@ -499,8 +507,9 @@ function syncSendLabel() {
 function renderSendBar() {
   const code = getCode();
   $('sendBar').innerHTML = code
-    ? `<input id="sendLabel" type="text" value="${esc(center.label)}" placeholder="Name this spot">
-       <button class="btn" id="sendBtn" type="button">📍 Send to my phone</button>
+    ? `<input id="sendLabel" type="text" value="${esc(labelResolving ? 'Looking up name…' : center.label)}"
+         placeholder="Name this spot" ${labelResolving ? 'disabled' : ''}>
+       <button class="btn" id="sendBtn" type="button" ${labelResolving ? 'disabled' : ''}>📍 Send to my phone</button>
        <button class="toggle" id="changeCode" type="button">change code</button>
        <span id="sendMsg"></span>`
     : `<input id="codeInput" type="text" placeholder="Paste the private code from the ONDA Menu app">
